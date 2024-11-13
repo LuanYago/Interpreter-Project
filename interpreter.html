@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interpretador</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap"
+        rel="stylesheet">
+
+    <!-- CodeMirror CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+
+    <style>
+        /* Reset básico */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #0e0e0e;
+            color: #e0e0e0;
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #1e1e1e;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .container h2 {
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.5rem;
+        }
+
+        .input-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* Ajustes para o editor CodeMirror */
+        .CodeMirror {
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            height: auto;
+
+        }
+
+        button {
+            align-self: flex-start;
+            padding: 10px 20px;
+            background-color: #02e1ff;
+            color: #000000;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            font-family: 'JetBrains Mono', monospace;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #005fa3;
+            color: #ffffff;
+        }
+
+        .output-section {
+            margin-top: 30px;
+        }
+
+        .output-section h3 {
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            border-bottom: 1px solid #555;
+            padding-bottom: 5px;
+        }
+
+        #output {
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 10px;
+            min-height: 100px;
+            font-family: 'JetBrains Mono', monospace;
+            white-space: pre-wrap;
+            overflow-y: auto;
+        }
+
+        /* Responsividade */
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            button {
+                width: 100%;
+            }
+        }
+
+        /* Destaque personalizado para palavras-chave */
+        .cm-keyword {
+            color: #ff79c6;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Insira o código para interpretar:</h2>
+        <div class="input-section">
+            <!-- Editor CodeMirror -->
+            <textarea id="codeInput" placeholder="Digite seu código aqui..."></textarea>
+            <button onclick="processCode()">Interpretar Código</button>
+        </div>
+        <div class="output-section">
+            <h3>Output:</h3>
+            <div id="output"></div>
+        </div>
+    </div>
+
+    <!-- CodeMirror JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <!-- CodeMirror Mode (JavaScript) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+    <!-- CodeMirror Overlay for custom highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/mode/overlay.min.js"></script>
+    <script>
+        // Inicializar o editor CodeMirror
+        const editor = CodeMirror.fromTextArea(document.getElementById('codeInput'), {
+            mode: 'javascript',
+            theme: 'dracula',
+            lineNumbers: true,
+            lineWrapping: false,
+            autofocus: true
+        });
+
+        // Definir palavras-chave personalizadas
+        CodeMirror.defineSimpleMode("customMode", {
+            start: [
+                {
+                    regex: /\b(var|type)\b/,
+                    token: "keyword"
+                },
+                {
+                    regex: /\b\d+\b/,
+                    token: "number"
+                },
+                {
+                    regex: /[a-zA-Z_][a-zA-Z0-9_]*/,
+                    token: "variable"
+                },
+                {
+                    regex: /=|;/,
+                    token: "operator"
+                },
+                {
+                    regex: /\s+/,
+                    token: "whitespace"
+                }
+            ],
+            meta: {
+                dontIndentStates: ["comment"],
+                lineComment: "//"
+            }
+        });
+
+        // Aplicar o modo personalizado
+        editor.setOption("mode", "customMode");
+
+        // Estilização personalizada para palavras-chave
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .cm-keyword {
+                color: #ff79c6;
+                font-weight: bold;
+            }
+            .cm-number {
+                color: #bd93f9;
+            }
+            .cm-variable {
+                color: #f1fa8c;
+            }
+            .cm-operator {
+                color: #50fa7b;
+            }
+        `;
+        document.head.appendChild(style);
+
+        function processCode() {
+            const data = editor.getValue();
+            const outputDiv = document.getElementById('output');
+            outputDiv.textContent = ''; // Limpa o output anterior
+
+            // Função lexer para criar tokens
+
+
+
+            function lexer(input) {
+                const tokens = []
+                let i = 0
+                while (i < input.length) {
+                    const char = input[i]
+
+                    if (/\s/.test(char)) {
+                        i++;
+                        continue;
+                    }
+
+                    if (/[a-zA-Z_]/.test(char)) {
+                        let identifier = ''
+                        while (/[a-zA-Z_]/.test(input[i])) identifier += input[i++];
+                        switch (identifier) {
+                            case "type":
+                            case "var":
+                                tokens.push({ type: 'KEYWORD', value: identifier });
+                                break;
+                            default:
+                                tokens.push({ type: 'IDENTIFIER', value: identifier });
+                        }
+                        continue;
+                    }
+
+                    if (/[0-9]/.test(char)) {
+                        let number = '';
+                        while (/[0-9]/.test(input[i])) number += input[i++];
+                        tokens.push({ type: 'NUMBER', value: parseInt(number, 10) });
+                        continue;
+                    }
+
+                    if (char === '=') {
+                        tokens.push({ type: 'OPERATOR', value: char });
+                        i++;
+                        continue;
+                    }
+
+                    switch (char) {
+                        case "+":
+                            tokens.push({ type: 'OPERATOR', value: char });
+                            i++;
+                            continue;
+                    }
+
+                    if (char === ';') {
+                        tokens.push({ type: 'DELIMITER', value: char });
+                        i++;
+                        continue;
+                    }
+
+                    throw new Error(`Caractere desconhecido: ${char}`);
+                }
+                return tokens;
+            }
+
+            // Função parser para criar AST
+            function parser(tk) {
+                const ast = { type: "Program", body: [] };
+                let i = 0;
+
+                while (i < tk.length) {
+                    switch (tk[i].type) {
+                        case "KEYWORD":
+                            switch (tk[i].value) {
+                                case "var":
+                                    let variableDeclaration = {
+                                        type: "variableDeclaration",
+                                        name: tk[i + 1].value,
+                                        init: {
+                                            type: "",
+                                            value: "",
+                                        }
+                                    };
+                                    let il = i + 1
+                                    let esquerda = {}
+                                    while (tk[il].type != "DELIMITER") {
+                                        switch (tk[il].type) {
+                                            case "NUMBER":
+                                                if (tk[il + 1].value === "+") {
+                                                    esquerda = { type: 'literal', value: tk[il].value }
+                                                } else if (tk[il - 1].value === "+") {
+                                                    variableDeclaration.init.right = { type: 'literal', value: tk[il].value };
+                                                } else {
+                                                    variableDeclaration.init = { type: 'literal', value: tk[il].value };
+                                                }
+                                                break
+                                            case "IDENTIFIER":
+                                                if (tk[il + 1].value === "+") {
+                                                    esquerda = { type: 'identifier', name: tk[il].value }
+                                                } else if (tk[il - 1].value === "+") {
+                                                    variableDeclaration.init.right = { type: 'identifier', name: tk[il].value };
+                                                } else {
+                                                    variableDeclaration.init = { type: 'identifier', name: tk[il].value };
+                                                }
+                                                break;
+                                            case "OPERATOR":
+                                                if (tk[il].value === "+") {
+
+                                                    variableDeclaration.init = {
+                                                        type: 'binaryExpression',
+                                                        operator: tk[il].value,
+                                                        left: esquerda,
+                                                        right: {}
+                                                    };
+                                                }
+                                                break
+                                            default:
+                                                throw new Error(`Tipo de inicialização desconhecido: ${tk[il].type}`);
+
+                                        }
+                                        il++
+
+                                    }
+                                    ast.body.push(variableDeclaration);
+                                    i = il + 1; // var name = value ;
+                                    break;
+                                case "type":
+                                    let typeStatement = {
+                                        type: "typeStatement",
+                                        argument: { type: "" }
+                                    };
+                                    if (tk[i + 1]) {
+                                        switch (tk[i + 1].type) {
+                                            case "NUMBER":
+                                                typeStatement.argument = { type: 'literal', value: tk[i + 1].value };
+                                                break;
+                                            case "IDENTIFIER":
+                                                typeStatement.argument = { type: 'identifier', name: tk[i + 1].value };
+                                                break;
+                                            default:
+                                                throw new Error(`Tipo de argumento desconhecido: ${tk[i + 1].type}`);
+                                        }
+                                        ast.body.push(typeStatement);
+                                        i += 3; // type argument ;
+                                    } else {
+                                        throw new Error("Sintaxe inválida para type statement.");
+                                    }
+                                    break;
+                                default:
+                                    throw new Error(`Palavra-chave desconhecida: ${tk[i].value}`);
+                            }
+                            break;
+                        case "DELIMITER":
+                            i += 1;
+                            break;
+                        case "NUMBER":
+                            i += 1;
+                            break;
+                        case "OPERATOR":
+                            i += 1;
+                            break;
+                        default:
+                            throw new Error(`Tipo de token inesperado: ${tk[i].type}`);
+                    }
+                }
+
+                return ast;
+            }
+
+            // Função interpret para executar a AST
+            function interpret(ast) {
+                const environment = {};
+
+                try{
+                ast.body.forEach(node => {
+                    switch (node.type) {
+                        case 'variableDeclaration':
+                            if (node.init.type === 'literal') {
+                                let nameVar = node.name;
+                                let valueVar = node.init.value;
+                                environment[nameVar] = valueVar;
+                            } else if (node.init.type === 'identifier') {
+                                let nameVar = node.name;
+                                let refVarName = node.init.name;
+                                if (environment.hasOwnProperty(refVarName)) {
+                                    let valueVar = environment[refVarName];
+                                    environment[nameVar] = valueVar;
+                                } else {
+                                    throw new Error(`Erro: A variável '${refVarName}' não está definida.`);
+                                }
+                            }
+                            break;
+                        case 'typeStatement':
+                            if (node.argument.type === 'literal') {
+                                output.textContent += `\n${node.argument.value}`
+                            } else if (node.argument.type === 'identifier') {
+                                if (environment.hasOwnProperty(node.argument.name)) {
+                                    output.textContent += `\n${environment[node.argument.name]}`
+                                } else {
+                                    throw new Error(`Erro: A variável '${node.argument.name}' não está definida.`);
+                                }
+                            }
+                            break;
+                        default:
+                            throw new Error(`Tipo de nó desconhecido: ${node.type}`);
+                    }
+                });
+                }catch{
+                    
+                }
+
+                return environment;
+            }
+
+
+
+
+            // Processamento do código inserido
+            try {
+                const tk = lexer(data);
+                console.log("Tokens:", tk);
+                const ast = parser(tk);
+                console.log("AST:", ast);
+                const environment = interpret(ast);
+                console.log("Ambiente final:", environment);
+            } catch (error) {
+                output.textContent += `\n${error.message}`;
+            }
+        }
+    </script>
+</body>
+
+</html>
